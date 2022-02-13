@@ -72,7 +72,7 @@ class ReservationStation[T <: Data : Arithmetic, U <: Data, V <: Data](config: G
   }
 
   val instructions_allocated = RegInit(0.U(32.W))
-  when (io.alloc.fire) {
+  when (io.alloc.fire()) {
     instructions_allocated := instructions_allocated + 1.U
   }
   dontTouch(instructions_allocated)
@@ -295,7 +295,7 @@ class ReservationStation[T <: Data : Arithmetic, U <: Data, V <: Data](config: G
     val is_load = funct === LOAD_CMD || funct === LOAD2_CMD || funct === LOAD3_CMD || (funct === CONFIG_CMD && (config_cmd_type === CONFIG_LOAD || config_cmd_type === CONFIG_CALM))
     val is_store = funct === STORE_CMD || (funct === CONFIG_CMD && config_cmd_type === CONFIG_STORE)
     val is_ex = funct === PRELOAD_CMD || funct_is_compute || (funct === CONFIG_CMD && (config_cmd_type === CONFIG_EX))
-    val is_im2col = funct === CONFIG_CMD && config_cmd_type === CONFIG_IM2COL // im2col commands are a subset of ex commands, so they still go in the ex queue
+    //val is_im2col = funct === CONFIG_CMD && config_cmd_type === CONFIG_IM2COL // im2col commands are a subset of ex commands, so they still go in the ex queue
 
     new_entry.q := Mux1H(Seq(
       is_load -> ldq,
@@ -363,7 +363,7 @@ class ReservationStation[T <: Data : Arithmetic, U <: Data, V <: Data](config: G
         }
       }
 
-    when (io.alloc.fire) {
+    when (io.alloc.fire()) {
       when (new_entry.is_config && new_entry.q === exq) {
         a_stride := new_entry.cmd.cmd.rs1(31, 16) // TODO magic numbers // TODO this needs to be kept in sync with ExecuteController.scala
         c_stride := new_entry.cmd.cmd.rs2(63, 48) // TODO magic numbers // TODO this needs to be kept in sync with ExecuteController.scala
@@ -448,7 +448,7 @@ class ReservationStation[T <: Data : Arithmetic, U <: Data, V <: Data](config: G
   }
 
   // Mark entries as completed once they've returned
-  when (io.completed.fire) {
+  when (io.completed.fire()) {
     val type_width = log2Up(res_max_per_type)
     val queue_type = io.completed.bits(type_width + 1, type_width)
     val issue_id = io.completed.bits(type_width - 1, 0)
@@ -519,7 +519,7 @@ class ReservationStation[T <: Data : Arithmetic, U <: Data, V <: Data](config: G
 
   val cycles_since_issue = RegInit(0.U(16.W))
 
-  when (io.issue.ld.fire() || io.issue.st.fire() || io.issue.ex.fire() || !io.busy || io.completed.fire) {
+  when (io.issue.ld.fire() || io.issue.st.fire() || io.issue.ex.fire() || !io.busy || io.completed.fire()) {
     cycles_since_issue := 0.U
   }.elsewhen(io.busy) {
     cycles_since_issue := cycles_since_issue + 1.U
