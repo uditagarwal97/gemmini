@@ -16,7 +16,7 @@ class PEControl[T <: Data : Arithmetic](accType: T) extends Bundle {
   * A PE implementing a MAC operation. Configured as fully combinational when integrated into a Mesh.
   * @param width Data width of operands
   */
-class PE[T <: Data](inputType: T, outputType: T, accType: T, df: Dataflow.Value, max_simultaneous_matmuls: Int)
+class PE[T <: Data](inputType: T, outputType: T, accType: T, df: Dataflow.Value, max_simultaneous_matmuls: Int, tile_row: UInt, tile_col: UInt, pe_row: UInt, pe_col: UInt)
                    (implicit ev: Arithmetic[T]) extends Module { // Debugging variables
   import ev._
 
@@ -82,22 +82,22 @@ class PE[T <: Data](inputType: T, outputType: T, accType: T, df: Dataflow.Value,
     when(prop === PROPAGATE) {
       io.out_c := (c1 >> shift_offset).clippedToWidthOf(outputType)
       io.out_b := b
-      c2 := c2.mac(a, b.asTypeOf(inputType))
+      c2 := c2.mac(a, b.asTypeOf(inputType)).injectFault(tile_row, tile_col, pe_row, pe_col)
       c1 := d.withWidthOf(cType)
     }.otherwise {
       io.out_c := (c2 >> shift_offset).clippedToWidthOf(outputType)
       io.out_b := b
-      c1 := c1.mac(a, b.asTypeOf(inputType))
+      c1 := c1.mac(a, b.asTypeOf(inputType)).injectFault(tile_row, tile_col, pe_row, pe_col)
       c2 := d.withWidthOf(cType)
     }
   }.elsewhen ((df == Dataflow.WS).B || ((df == Dataflow.BOTH).B && dataflow === WEIGHT_STATIONARY)) {
     when(prop === PROPAGATE) {
       io.out_c := c1
-      io.out_b := b.mac(a, c2.asTypeOf(inputType))
+      io.out_b := b.mac(a, c2.asTypeOf(inputType)).injectFault(tile_row, tile_col, pe_row, pe_col)
       c1 := d
     }.otherwise {
       io.out_c := c2
-      io.out_b := b.mac(a, c1.asTypeOf(inputType))
+      io.out_b := b.mac(a, c1.asTypeOf(inputType)).injectFault(tile_row, tile_col, pe_row, pe_col)
       c2 := d
     }
   }.otherwise {

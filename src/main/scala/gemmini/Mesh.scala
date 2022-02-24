@@ -36,7 +36,7 @@ class Mesh[T <: Data : Arithmetic](inputType: T, outputType: T, accType: T,
   })
 
   // mesh(r)(c) => Tile at row r, column c
-  val mesh: Seq[Seq[Tile[T]]] = Seq.fill(meshRows, meshColumns)(Module(new Tile(inputType, outputType, accType, df, tree_reduction, max_simultaneous_matmuls, tileRows, tileColumns)))
+  val mesh: Seq[Seq[Tile[T]]] = Seq.tabulate(meshRows, meshColumns)((i, j) => Module(new Tile(inputType, outputType, accType, df, tree_reduction, max_simultaneous_matmuls, tileRows, tileColumns, i.U, j.U)))
   val meshT = mesh.transpose
 
   def pipe[T <: Data](valid: Bool, t: T, latency: Int): T = {

@@ -17,6 +17,13 @@ case class Float(expWidth: Int, sigWidth: Int) extends Bundle {
 // The Arithmetic typeclass which implements various arithmetic operations on custom datatypes
 abstract class Arithmetic[T <: Data] {
   implicit def cast(t: T): ArithmeticOps[T]
+
+  // Parameters to control FI
+  val doFI = true.B
+  val fi_pe_col = 0.U
+  val fi_pe_row = 0.U
+  val fi_tile_col = 0.U
+  val fi_tile_row = 0.U
 }
 
 abstract class ArithmeticOps[T <: Data](self: T) {
@@ -31,6 +38,7 @@ abstract class ArithmeticOps[T <: Data](self: T) {
   def relu: T
   def relu6(shift: UInt): T
   def zero: T
+  def injectFault(tile_row: UInt, tile_col: UInt, pe_row: UInt, pe_col: UInt) : T // Inject fault in the PE
 }
 
 object Arithmetic {
@@ -72,6 +80,13 @@ object Arithmetic {
 
       override def zero: UInt = 0.U
       override def identity: UInt = 1.U
+
+      override def injectFault(tile_row: UInt, tile_col: UInt, pe_row: UInt, pe_col: UInt) : UInt = {
+
+        assert((tile_row >= 0.U) && (tile_col >= 0.U) && (pe_row === 0.U) && (pe_col === 0.U))
+
+        Mux(tile_col === fi_tile_col && tile_row === fi_tile_row, 0.U, self)
+      }
     }
   }
 
@@ -122,6 +137,13 @@ object Arithmetic {
 
       override def zero: SInt = 0.S
       override def identity: SInt = 1.S
+      
+      override def injectFault(tile_row: UInt, tile_col: UInt, pe_row: UInt, pe_col: UInt) : SInt = {
+
+        assert((tile_row >= 0.U) && (tile_col >= 0.U) && (pe_row === 0.U) && (pe_col === 0.U))
+
+        return Mux (tile_col === fi_tile_col && tile_row === fi_tile_row, 0.S, self)
+      }
     }
   }
 
@@ -362,6 +384,12 @@ object Arithmetic {
 
       override def zero: Float = 0.U.asTypeOf(self)
       override def identity: Float = Cat(0.U(2.W), ~(0.U((self.expWidth-1).W)), 0.U((self.sigWidth-1).W)).asTypeOf(self)
+      
+      override def injectFault(tile_row: UInt, tile_col: UInt, pe_row: UInt, pe_col: UInt) : Float = {
+
+        assert((tile_row >= 0.U) && (tile_col >= 0.U) && (pe_row === 0.U) && (pe_col === 0.U))
+        return Mux(tile_col === fi_tile_col && tile_row === fi_tile_row, 0.U.asTypeOf(self), self)
+      }
     }
   }
 }
