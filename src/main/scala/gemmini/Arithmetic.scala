@@ -6,6 +6,8 @@ package gemmini
 import chisel3._
 import chisel3.util._
 import hardfloat._
+import Util._
+import midas.targetutils.SynthesizePrintf
 
 // Bundles that represent the raw bits of custom datatypes
 case class Float(expWidth: Int, sigWidth: Int) extends Bundle {
@@ -17,13 +19,6 @@ case class Float(expWidth: Int, sigWidth: Int) extends Bundle {
 // The Arithmetic typeclass which implements various arithmetic operations on custom datatypes
 abstract class Arithmetic[T <: Data] {
   implicit def cast(t: T): ArithmeticOps[T]
-
-  // Parameters to control FI
-  val doFI = true.B
-  val fi_pe_col = 0.U
-  val fi_pe_row = 0.U
-  val fi_tile_col = 0.U
-  val fi_tile_row = 0.U
 }
 
 abstract class ArithmeticOps[T <: Data](self: T) {
@@ -38,7 +33,7 @@ abstract class ArithmeticOps[T <: Data](self: T) {
   def relu: T
   def relu6(shift: UInt): T
   def zero: T
-  def injectFault(tile_row: UInt, tile_col: UInt, pe_row: UInt, pe_col: UInt) : T // Inject fault in the PE
+  def injectFault(tile_row: UInt, tile_col: UInt, pe_row: UInt, pe_col: UInt, do_fi: UInt, fi_tile_row: UInt, fi_tile_col: UInt, fi_pe_row: UInt, fi_pe_col: UInt, fi_model: UInt, fi_data: UInt) : T // Inject fault in the PE
 }
 
 object Arithmetic {
@@ -81,11 +76,33 @@ object Arithmetic {
       override def zero: UInt = 0.U
       override def identity: UInt = 1.U
 
-      override def injectFault(tile_row: UInt, tile_col: UInt, pe_row: UInt, pe_col: UInt) : UInt = {
+      override def injectFault(tile_row: UInt, tile_col: UInt, pe_row: UInt, pe_col: UInt, do_fi: UInt, fi_tile_row: UInt, fi_tile_col: UInt, fi_pe_row: UInt, fi_pe_col: UInt, fi_model: UInt, fi_data: UInt) :  UInt = {
 
         assert((tile_row >= 0.U) && (tile_col >= 0.U) && (pe_row === 0.U) && (pe_col === 0.U))
+  
+        var fault = 0.U
 
-        Mux(tile_col === fi_tile_col && tile_row === fi_tile_row, 0.U, self)
+        // Output of PE will be 0
+        when (fi_model === 0.U) {
+          fault = 0.U
+        }
+        /*
+        // Stuck at 0 fault
+        .elsewhen (fi_model === 1.U) {
+          assert(fi_data <= self.getWidth)
+          fault := fault & ~(1.U << fi_data).U
+        }
+        // Stuck at 1 fault
+        .elsewhen (fi_model === 2.U) {
+          assert(fi_data <= self.getWidth)
+          fault := fault | (1.U << fi_data).U
+        }
+        */
+        .otherwise {
+          fault = self
+        }
+
+        Mux(tile_col === fi_tile_col && tile_row === fi_tile_row && pe_row === fi_pe_row && pe_col === fi_pe_col && do_fi === 1.U, fault, self)
       }
     }
   }
@@ -138,11 +155,35 @@ object Arithmetic {
       override def zero: SInt = 0.S
       override def identity: SInt = 1.S
       
-      override def injectFault(tile_row: UInt, tile_col: UInt, pe_row: UInt, pe_col: UInt) : SInt = {
+      override def injectFault(tile_row: UInt, tile_col: UInt, pe_row: UInt, pe_col: UInt, do_fi: UInt, fi_tile_row: UInt, fi_tile_col: UInt, fi_pe_row: UInt, fi_pe_col: UInt, fi_model: UInt, fi_data: UInt) :  SInt = {
 
         assert((tile_row >= 0.U) && (tile_col >= 0.U) && (pe_row === 0.U) && (pe_col === 0.U))
+ 
+        //assert(fi_reg >= 0.U)
+        
+        var fault = 0.S
 
-        return Mux (tile_col === fi_tile_col && tile_row === fi_tile_row, 0.S, self)
+        // Output of PE will be 0
+        when (fi_model === 0.U) {
+          fault = 0.S
+        }
+        /*
+        // Stuck at 0 fault
+        .elsewhen (fi_model === 1.U) {
+          assert(fi_data <= 32.U)
+          fault := fault & ~(1.S << fi_data).S
+        }
+        // Stuck at 1 fault
+        .elsewhen (fi_model === 2.U) {
+          assert(fi_data <= 32.U)
+          fault := fault | (1.S << fi_data).S
+        }
+        */
+        .otherwise {
+          fault = self
+        }
+
+        Mux(tile_col === fi_tile_col && tile_row === fi_tile_row && pe_row === fi_pe_row && pe_col === fi_pe_col && do_fi === 1.U, fault, self)
       }
     }
   }
@@ -385,10 +426,33 @@ object Arithmetic {
       override def zero: Float = 0.U.asTypeOf(self)
       override def identity: Float = Cat(0.U(2.W), ~(0.U((self.expWidth-1).W)), 0.U((self.sigWidth-1).W)).asTypeOf(self)
       
-      override def injectFault(tile_row: UInt, tile_col: UInt, pe_row: UInt, pe_col: UInt) : Float = {
+      override def injectFault(tile_row: UInt, tile_col: UInt, pe_row: UInt, pe_col: UInt, do_fi: UInt, fi_tile_row: UInt, fi_tile_col: UInt, fi_pe_row: UInt, fi_pe_col: UInt, fi_model: UInt, fi_data: UInt) :  Float = {
 
         assert((tile_row >= 0.U) && (tile_col >= 0.U) && (pe_row === 0.U) && (pe_col === 0.U))
-        return Mux(tile_col === fi_tile_col && tile_row === fi_tile_row, 0.U.asTypeOf(self), self)
+  
+        val fault = Reg(Float(self.expWidth, self.sigWidth))
+
+        // Output of PE will be 0
+        when (fi_model === 0.U) {
+          fault := 0.U.asTypeOf(self)
+        }
+        /*
+        // Stuck at 0 fault
+        .elsewhen (fi_model === 1.U) {
+          assert(fi_data <= self.W)
+          fault := fault & ~(1 << fi_data).U.asTypeOf(self)
+        }
+        // Stuck at 1 fault
+        .elsewhen (fi_model === 2.U) {
+          assert(fi_data <= self.W)
+          fault := fault | (1 << fi_data).U.asTypeOf(self)
+        }
+        */
+        .otherwise {
+          fault := self
+        }
+
+        Mux(tile_col === fi_tile_col && tile_row === fi_tile_row && pe_row === fi_pe_row && pe_col === fi_pe_col && do_fi === 1.U, fault, self)
       }
     }
   }

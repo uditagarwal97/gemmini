@@ -65,7 +65,12 @@ class MeshWithDelays[T <: Data: Arithmetic, U <: TagQueueTag with Data]
     val resp = Valid(new MeshWithDelaysResp(outputType, meshColumns, tileColumns, block_size, tagType.cloneType))
 
     val tags_in_progress = Output(Vec(tagqlen, tagType))
+
+    val fi_reg = Input(UInt(64.W))
   })
+
+  val fi_reg = Reg(UInt(64.W))
+  fi_reg := io.fi_reg
 
   def shifted[T <: Data](x: Vec[Vec[T]], banks: Int, reverse: Boolean = false) = {
     assert(x.size % banks == 0, "cannot bank without clean divisors")
@@ -166,6 +171,7 @@ class MeshWithDelays[T <: Data: Arithmetic, U <: TagQueueTag with Data]
   // Wire up mesh's IO to this module's IO
   val mesh = Module(new Mesh(inputType, outputType, accType, df, tree_reduction, tile_latency, max_simultaneous_matmuls, output_delay, tileRows, tileColumns, meshRows, meshColumns))
 
+  mesh.io.fi_reg := fi_reg
   // TODO wire only to *_buf here, instead of io.*.bits
   val a_shifter_in = WireInit(Mux(a_is_from_transposer, transposer_out.asTypeOf(A_TYPE), a_buf))
   val b_shifter_in = WireInit(Mux(b_is_from_transposer, transposer_out.asTypeOf(B_TYPE), b_buf))

@@ -239,6 +239,9 @@ class GemminiModule[T <: Data: Arithmetic, U <: Data, V <: Data]
   ex_controller.io.cmd.bits.cmd.inst.funct := reservation_station.io.issue.ex.cmd.inst.funct
   ex_controller.io.cmd.bits.rob_id.push(reservation_station.io.issue.ex.rob_id)
 
+  val fi_reg = Reg(UInt(64.W))
+  ex_controller.io.fi_reg := fi_reg
+
   // Wire up scratchpad to controllers
   spad.module.io.dma.read <> load_controller.io.dma
   spad.module.io.dma.write <> store_controller.io.dma
@@ -360,6 +363,7 @@ class GemminiModule[T <: Data: Arithmetic, U <: Data, V <: Data]
     val is_flush = risc_funct === FLUSH_CMD
     val is_counter_op = risc_funct === COUNTER_OP
     val is_clock_gate_en = risc_funct === CLKGATE_EN
+    val is_fi = risc_funct === FAULT_INJECTION_CMD
 
     /*
     val is_load = (funct === LOAD_CMD) || (funct === CONFIG_CMD && config_cmd_type === CONFIG_LOAD)
@@ -374,6 +378,11 @@ class GemminiModule[T <: Data: Arithmetic, U <: Data, V <: Data]
       tlb.io.exp.foreach(_.flush_retry := !skip)
 
       unrolled_cmd.ready := true.B // TODO should we wait for an acknowledgement from the TLB?
+    }
+
+    .elsewhen (is_fi) {
+      fi_reg := unrolled_cmd.bits.rs1
+      unrolled_cmd.ready := true.B
     }
 
     .elsewhen (is_counter_op) {

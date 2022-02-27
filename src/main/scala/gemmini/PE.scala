@@ -41,7 +41,28 @@ class PE[T <: Data](inputType: T, outputType: T, accType: T, df: Dataflow.Value,
     val out_valid = Output(Bool())
 
     val bad_dataflow = Output(Bool())
+
+    val fi_reg = Input(UInt(64.W))
+    val fi_tile_col = Input(UInt(10.W))
+    val fi_tile_row = Input(UInt(10.W))
+    val fi_pe_row = Input(UInt(10.W))
+    val fi_pe_col = Input(UInt(10.W))
+    val do_fi = Input(UInt(1.W))
+    val fault_model = Input(UInt(3.W))
+    val fault_data = Input(UInt(20.W))
   })
+
+
+  val fi_reg = Reg(UInt(64.W))
+  fi_reg := fi_reg
+
+  val fi_tile_col = io.fi_tile_col
+  val fi_tile_row = io.fi_tile_row
+  val fi_pe_col = io.fi_pe_col
+  val fi_pe_row = io.fi_pe_row
+  val do_fi = io.do_fi
+  val fault_model = io.fault_model
+  val fault_data = io.fault_data
 
   val cType = if (df == Dataflow.WS) inputType else accType
 
@@ -79,25 +100,28 @@ class PE[T <: Data](inputType: T, outputType: T, accType: T, df: Dataflow.Value,
 
   io.bad_dataflow := false.B
   when ((df == Dataflow.OS).B || ((df == Dataflow.BOTH).B && dataflow === OUTPUT_STATIONARY)) {
+
+    assert(fi_tile_col < 1024.U && fi_tile_row < 1024.U && fi_pe_row < 1024.U && fi_pe_col < 1024.U && do_fi < 2.U && fault_model < 9.U)
+    
     when(prop === PROPAGATE) {
       io.out_c := (c1 >> shift_offset).clippedToWidthOf(outputType)
       io.out_b := b
-      c2 := c2.mac(a, b.asTypeOf(inputType)).injectFault(tile_row, tile_col, pe_row, pe_col)
+      c2 := c2.mac(a, b.asTypeOf(inputType)).injectFault(tile_row, tile_col, pe_row, pe_col, do_fi, fi_tile_row, fi_tile_col, fi_pe_row, fi_pe_col, fault_model, fault_data)
       c1 := d.withWidthOf(cType)
     }.otherwise {
       io.out_c := (c2 >> shift_offset).clippedToWidthOf(outputType)
       io.out_b := b
-      c1 := c1.mac(a, b.asTypeOf(inputType)).injectFault(tile_row, tile_col, pe_row, pe_col)
+      c1 := c1.mac(a, b.asTypeOf(inputType)).injectFault(tile_row, tile_col, pe_row, pe_col, do_fi, fi_tile_row, fi_tile_col, fi_pe_row, fi_pe_col, fault_model, fault_data)
       c2 := d.withWidthOf(cType)
     }
   }.elsewhen ((df == Dataflow.WS).B || ((df == Dataflow.BOTH).B && dataflow === WEIGHT_STATIONARY)) {
     when(prop === PROPAGATE) {
       io.out_c := c1
-      io.out_b := b.mac(a, c2.asTypeOf(inputType)).injectFault(tile_row, tile_col, pe_row, pe_col)
+      io.out_b := b.mac(a, c2.asTypeOf(inputType)).injectFault(tile_row, tile_col, pe_row, pe_col, do_fi, fi_tile_row, fi_tile_col, fi_pe_row, fi_pe_col, fault_model, fault_data)
       c1 := d
     }.otherwise {
       io.out_c := c2
-      io.out_b := b.mac(a, c1.asTypeOf(inputType)).injectFault(tile_row, tile_col, pe_row, pe_col)
+      io.out_b := b.mac(a, c1.asTypeOf(inputType)).injectFault(tile_row, tile_col, pe_row, pe_col, do_fi, fi_tile_row, fi_tile_col, fi_pe_row, fi_pe_col, fault_model, fault_data)
       c2 := d
     }
   }.otherwise {

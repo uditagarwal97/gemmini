@@ -33,7 +33,11 @@ class Mesh[T <: Data : Arithmetic](inputType: T, outputType: T, accType: T,
     val out_control = Output(Vec(meshColumns, Vec(tileColumns, new PEControl(accType))))
     val out_id = Output(Vec(meshColumns, Vec(tileColumns, UInt(log2Up(max_simultaneous_matmuls).W))))
     val out_last = Output(Vec(meshColumns, Vec(tileColumns, Bool())))
+    val fi_reg = Input(UInt(64.W))
   })
+
+  val fi_reg = Reg(UInt(64.W))
+  fi_reg := io.fi_reg
 
   // mesh(r)(c) => Tile at row r, column c
   val mesh: Seq[Seq[Tile[T]]] = Seq.tabulate(meshRows, meshColumns)((i, j) => Module(new Tile(inputType, outputType, accType, df, tree_reduction, max_simultaneous_matmuls, tileRows, tileColumns, i.U, j.U)))
@@ -45,6 +49,12 @@ class Mesh[T <: Data : Arithmetic](inputType: T, outputType: T, accType: T,
     chisel3.withReset(false.B) { Pipe(valid, t, latency).bits }
   }
 
+  for (r <- 0 until meshRows) {
+    for (c <- 0 until meshColumns) {
+      mesh(r)(c).io.fi_reg := fi_reg
+    }
+  }
+  
   // Chain tile_a_out -> tile_a_in (pipeline a across each row)
   // TODO clock-gate A signals with in_garbage
   for (r <- 0 until meshRows) {

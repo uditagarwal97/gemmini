@@ -46,9 +46,14 @@ class ExecuteController[T <: Data, U <: Data, V <: Data](xLen: Int, tagWidth: In
     val solitary_preload = Output(Bool()) // TODO very hacky. for ROB, to prevent infinite fence stalls. remove later
 
     val counter = new CounterEventIO()
+
+    val fi_reg = Input(UInt(64.W))
   })
 
   val block_size = meshRows*tileRows
+
+  val fi_reg = Reg(UInt(64.W))
+  fi_reg := io.fi_reg
 
   val mesh_tag = new Bundle with TagQueueTag {
     val rob_id = UDValid(UInt(log2Up(rob_entries).W))
@@ -190,6 +195,7 @@ class ExecuteController[T <: Data, U <: Data, V <: Data](xLen: Int, tagWidth: In
   val mesh = Module(new MeshWithDelays(inputType, spatialArrayOutputType, accType, mesh_tag, dataflow, tree_reduction, tile_latency, mesh_output_delay,
     tileRows, tileColumns, meshRows, meshColumns, shifter_banks, shifter_banks))
 
+  mesh.io.fi_reg := fi_reg
   mesh.io.a.valid := false.B
   mesh.io.b.valid := false.B
   mesh.io.d.valid := false.B

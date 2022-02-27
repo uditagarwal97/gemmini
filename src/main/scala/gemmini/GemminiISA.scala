@@ -34,6 +34,8 @@ object GemminiISA {
 
   val CLKGATE_EN = 22.U
 
+  val FAULT_INJECTION_CMD = 23.U
+
   // rs1[2:0] values
   val CONFIG_EX = 0.U
   val CONFIG_LOAD = 1.U

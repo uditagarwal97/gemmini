@@ -35,12 +35,30 @@ class Tile[T <: Data](inputType: T, outputType: T, accType: T, df: Dataflow.Valu
     val out_valid = Output(Vec(columns, Bool()))
 
     val bad_dataflow = Output(Bool())
+
+    val fi_reg = Input(UInt(64.W))
   })
 
   import ev._
 
+  val fi_reg = Reg(UInt(64.W))
+  fi_reg := io.fi_reg
+
   val tile = Seq.tabulate(rows, columns)( (i, j) => Module(new PE(inputType, outputType, accType, df, max_simultaneous_matmuls, tile_row, tile_col, i.U, j.U)))
   val tileT = tile.transpose
+
+  for (r <- 0 until rows) {
+    for (c <- 0 until columns) {
+      tile(r)(c).io.fi_reg := fi_reg
+      tile(r)(c).io.fi_tile_col := fi_reg(9, 0)
+      tile(r)(c).fi_tile_row := fi_reg(19, 10)
+      tile(r)(c).fi_pe_row := fi_reg(29, 20)
+      tile(r)(c).fi_pe_col := fi_reg(39, 30)
+      tile(r)(c).do_fi := fi_reg(40)
+      tile(r)(c).fault_model := fi_reg(43, 41)
+      tile(r)(c).fault_data := fi_reg(63, 44)
+    }
+  }
 
   // TODO: abstract hori/vert broadcast, all these connections look the same
   // Broadcast 'a' horizontally across the Tile
