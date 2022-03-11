@@ -61,6 +61,7 @@ class PE[T <: Data](inputType: T, outputType: T, accType: T, df: Dataflow.Value,
   val fi_pe_col = io.fi_pe_col
   val fi_pe_row = io.fi_pe_row
   val do_fi = io.do_fi
+  
   val fault_model = io.fault_model
   val fault_data = io.fault_data
 
@@ -106,22 +107,46 @@ class PE[T <: Data](inputType: T, outputType: T, accType: T, df: Dataflow.Value,
     when(prop === PROPAGATE) {
       io.out_c := (c1 >> shift_offset).clippedToWidthOf(outputType)
       io.out_b := b
-      c2 := c2.mac(a, b.asTypeOf(inputType)).injectFault(tile_row, tile_col, pe_row, pe_col, do_fi, fi_tile_row, fi_tile_col, fi_pe_row, fi_pe_col, fault_model, fault_data)
+      
+      when(do_fi === 1.U(1.W)){
+        c2 := c2.mac(a, b.asTypeOf(inputType)).injectFault(tile_row, tile_col, pe_row, pe_col, do_fi, fi_tile_row, fi_tile_col, fi_pe_row, fi_pe_col, fault_model, fault_data)
+      }.otherwise {
+        c2 := c2.mac(a, b.asTypeOf(inputType))
+      }
+      
       c1 := d.withWidthOf(cType)
     }.otherwise {
       io.out_c := (c2 >> shift_offset).clippedToWidthOf(outputType)
       io.out_b := b
-      c1 := c1.mac(a, b.asTypeOf(inputType)).injectFault(tile_row, tile_col, pe_row, pe_col, do_fi, fi_tile_row, fi_tile_col, fi_pe_row, fi_pe_col, fault_model, fault_data)
+      
+      when(do_fi === 1.U(1.W)){
+        c1 := c1.mac(a, b.asTypeOf(inputType)).injectFault(tile_row, tile_col, pe_row, pe_col, do_fi, fi_tile_row, fi_tile_col, fi_pe_row, fi_pe_col, fault_model, fault_data)
+      }.otherwise {
+        c1 := c1.mac(a, b.asTypeOf(inputType))
+      }
+
       c2 := d.withWidthOf(cType)
     }
   }.elsewhen ((df == Dataflow.WS).B || ((df == Dataflow.BOTH).B && dataflow === WEIGHT_STATIONARY)) {
     when(prop === PROPAGATE) {
       io.out_c := c1
-      io.out_b := b.mac(a, c2.asTypeOf(inputType)).injectFault(tile_row, tile_col, pe_row, pe_col, do_fi, fi_tile_row, fi_tile_col, fi_pe_row, fi_pe_col, fault_model, fault_data)
+
+      when(do_fi === 1.U(1.W)) {
+        io.out_b := b.mac(a, c2.asTypeOf(inputType)).injectFault(tile_row, tile_col, pe_row, pe_col, do_fi, fi_tile_row, fi_tile_col, fi_pe_row, fi_pe_col, fault_model, fault_data)
+      }.otherwise {
+        io.out_b := b.mac(a, c2.asTypeOf(inputType))
+      }
+      
       c1 := d
     }.otherwise {
       io.out_c := c2
-      io.out_b := b.mac(a, c1.asTypeOf(inputType)).injectFault(tile_row, tile_col, pe_row, pe_col, do_fi, fi_tile_row, fi_tile_col, fi_pe_row, fi_pe_col, fault_model, fault_data)
+
+      when(do_fi === 1.U(1.W)){
+        io.out_b := b.mac(a, c1.asTypeOf(inputType)).injectFault(tile_row, tile_col, pe_row, pe_col, do_fi, fi_tile_row, fi_tile_col, fi_pe_row, fi_pe_col, fault_model, fault_data)
+      }.otherwise {
+        io.out_b := b.mac(a, c1.asTypeOf(inputType))
+      }
+      
       c2 := d
     }
   }.otherwise {
