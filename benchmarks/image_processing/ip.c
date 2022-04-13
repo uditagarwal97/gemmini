@@ -7,6 +7,14 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
+void saveImage(unsigned char *img[], int width, int height) {
+
+    FILE *f = fopen("out.ppm", "wb");
+    fprintf(f, "P5\n%i %i 255\n", width, height);
+    fwrite(img, sizeof(img), 1, f);
+    fclose(f);
+}
+
 int main(int argc, char *argv[]) {
 
     char *filename;
@@ -19,15 +27,21 @@ int main(int argc, char *argv[]) {
 
     int width, height, channels;
 
-    float *rgb_image = stbi_loadf(filename, &width, &height, &channels, 1);
+    unsigned char *rgb_image = stbi_load(filename, &width, &height, &channels, 1);
+    unsigned char qimage[height][width];
 
     for(int i=0;i<height;i++)
    {
     for(int j=0;j<width;j++)
      {
-       printf("%f", rgb_image[i*height + j]);
+       qimage[i][j] = rgb_image[i*height + j];
+       printf("%d ", qimage[i][j]);
      }
    }
 
+   FILE *f = fopen("out.ppm", "wb");
+   fprintf(f, "P5\n%i %i 255\n", width, height);
+   fwrite(qimage, sizeof(qimage), 1, f);
+   fclose(f);
    return 0;
 }
