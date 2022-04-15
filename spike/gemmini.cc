@@ -4,14 +4,24 @@
 #include <stdexcept>
 #include <iostream>
 #include <assert.h>
+#include <cstdlib>
+#include <time.h>
 
 using namespace std;
 
 REGISTER_EXTENSION(gemmini, []() { return new gemmini_t; })
 
+
+
 // Global Variables
-size_t fi_i;
-size_t fi_j;
+struct FI {
+	size_t fi_i;
+	size_t fi_j;
+	bool do_fi;
+	int fault_model;
+	int fault_data;
+	int fi_bit_loc;
+} FIParams;
 
 void gemmini_state_t::reset()
 {
@@ -472,7 +482,7 @@ void gemmini_t::config(reg_t rs1, reg_t rs2) {
 
 void gemmini_t::compute(reg_t a_addr, reg_t bd_addr, bool preload) {
 
-  printf("In compute \n");
+  dprintf("In compute \n");
   auto a_addr_real = static_cast<uint32_t>(a_addr & 0xFFFFFFFF);
   auto bd_addr_real = static_cast<uint32_t>(bd_addr & 0xFFFFFFFF);
 
@@ -487,7 +497,7 @@ void gemmini_t::compute(reg_t a_addr, reg_t bd_addr, bool preload) {
 
   // Preload
   if (preload) {
-    printf("GEMMINI: compute - PEs after preloading:\n");
+    dprintf("GEMMINI: compute - PEs after preloading:\n");
     for (size_t i = 0; i < DIM; i++) {
       for (size_t j = 0; j < DIM; j++) {
         // TODO: Handle preloads from accumulator, values are shifted and activated before preload
@@ -511,12 +521,12 @@ void gemmini_t::compute(reg_t a_addr, reg_t bd_addr, bool preload) {
         }
 
 #ifdef ELEM_T_IS_FLOAT
-        printf("%f ", gemmini_state.pe_state.at(i).at(j));
+        dprintf("%f ", gemmini_state.pe_state.at(i).at(j));
 #else
-        printf("%d ", gemmini_state.pe_state.at(i).at(j));
+        dprintf("%d ", gemmini_state.pe_state.at(i).at(j));
 #endif
       }
-      printf("\n");
+      dprintf("\n");
     }
   }
 
@@ -548,13 +558,13 @@ void gemmini_t::compute(reg_t a_addr, reg_t bd_addr, bool preload) {
         if (gemmini_state.mode == gemmini_state_t::WS) {
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
-          results.at(i).at(j) += a * gemmini_state.pe_state.at(k).at(j);
+	  
+	  if (i == FIParams.fi_i && j == FIParams.fi_j) {
+		  gemmini_state.pe_state.at(i).at(j) = injectFault(gemmini_state.pe_state.at(i).at(j));
+	  }
+          
+	  results.at(i).at(j) += a * gemmini_state.pe_state.at(k).at(j);
 
-	  //printf("I=%d, J=%d, K=%d \n", i, j, k);
-	  if (k == fi_i && j == fi_j) {results.at(i).at(j) = 0; printf("Injecting fault i=%d, j=%d, k=%d\n", i, j, k);}
-	  //assert(false);
-	  // FI
-	  //if (i == 1 && j == 1) {printf("Original val: %d\n", results.at(i).at(j)); results.at(i).at(j) = results.at(i).at(j) + 10;}
 #pragma GCC diagnostic pop
         } else {
           elem_t b = 0;
@@ -567,9 +577,9 @@ void gemmini_t::compute(reg_t a_addr, reg_t bd_addr, bool preload) {
 
           gemmini_state.pe_state.at(i).at(j) += a * b;
           
-	  //assert(false);
-	  // FI
-	  if (i == fi_i && j == fi_j) {printf("Original val: %d\n", gemmini_state.pe_state.at(i).at(j)); gemmini_state.pe_state.at(i).at(j) = 0;}
+	  if (i == FIParams.fi_i && j == FIParams.fi_j) {
+		  gemmini_state.pe_state.at(i).at(j) = injectFault(gemmini_state.pe_state.at(i).at(j));
+	  }
         }
       }
     }
@@ -904,7 +914,7 @@ void gemmini_t::loop_ws_config_strides_DC(reg_t rs1, reg_t rs2) {
 
 void setFI(reg_t rs1, reg_t rs2) {
 	int tile_row = rs1 & 0x000003ff;
-	int tile_col = (rs1 >> 10 ) & 0x000003ff;
+	int tile_col = (rs1 >> 10) & 0x000003ff;
 	int pe_row = (rs1 >> 20) & 0x000003ff;
 	int pe_col = (rs1 >> 30) & 0x000003ff;
 	int do_fi = (rs1 >> 40) & 0x00000001;
@@ -914,12 +924,52 @@ void setFI(reg_t rs1, reg_t rs2) {
 			tile_row, tile_col, pe_row, pe_col, do_fi, fault_model, fault_data);
 
 	if (do_fi) {
-		fi_i = tile_row;
-		fi_j = tile_col;
+		FIParams.fi_i = tile_row;
+		FIParams.fi_j = tile_col;
+		FIParams.do_fi = 1;
+		FIParams.fault_model = fault_model;
+		FIParams.fault_data = fault_data;
+		FIParams.fi_bit_loc = fault_data;
+
+		// If FI_model == stuck-at fault && fault_data == randomly selected bit
+		if (FIParams.fault_model != 0 && FIParams.fault_data == 0) {
+			srand(time(NULL));
+			int rvar = rand() % 32;
+			FIParams.fi_bit_loc = rvar;
+		}
 	}
 	else {
-		fi_i = -1;
-		fi_j = -1;
+		FIParams.fi_i = -1;
+		FIParams.fi_j = -1;
+		FIParams.do_fi = 0;
+	}
+}
+
+int gemmini_t::injectStuckAtOne(int val, int bit_loc) {
+	return (val | (1 << bit_loc));
+}
+
+int gemmini_t::injectStuckAtZero(int val, int bit_loc) {
+	return val & ~(1 << bit_loc);
+}
+
+int gemmini_t::injectFault(int val) {
+	if (FIParams.do_fi) {
+		// Set Value to 0
+		if (FIParams.fault_model == 0) return 0;
+
+		// Stuck-at-1 fault
+		if (FIParams.fault_model == 1) {
+			return injectStuckAtOne(val, FIParams.fi_bit_loc);
+		}
+
+		// Stuck-at-0 fault
+		if (FIParams.fault_model == 2) {
+			return injectStuckAtZero(val, FIParams.fi_bit_loc);
+		}
+	}
+	else {
+		return val;
 	}
 }
 

@@ -1,5 +1,7 @@
 // See LICENSE for license details.
 
+//#define _POSIX_C_SOURCE 2
+
 #include <stdint.h>
 #include <stddef.h>
 #include <assert.h>
@@ -9,6 +11,10 @@
 #include <sys/mman.h>
 #endif
 #include "include/gemmini_testutils.h"
+
+#ifdef PK
+#include "include/fi_cmd_args.h"
+#endif
 
 #define NO_BIAS 1
 #define FULL_BIAS_WIDTH 1
@@ -20,9 +26,9 @@ typedef elem_t ACC_T;
 #error variable-bitwidth bias not currently supported
 #endif
 
-#define MAT_DIM_I 16
-#define MAT_DIM_K 16
-#define MAT_DIM_J 16
+#define MAT_DIM_I 32
+#define MAT_DIM_K 32
+#define MAT_DIM_J 32
 
 void print_tile(elem_t* in, int tile_dim) {
   for (size_t r = 0; r < tile_dim; r++) {
@@ -75,7 +81,12 @@ void full_matshift(full_t full[MAT_DIM_I][MAT_DIM_J], elem_t out[MAT_DIM_I][MAT_
     }
 } 
 
-int main() {
+int main(int argc, char** argv) {
+
+#ifdef PK
+    parseArguments(argc, argv);
+#endif
+
 #ifndef BAREMETAL
     if (mlockall(MCL_CURRENT | MCL_FUTURE) != 0) {
       perror("mlockall failed");
@@ -97,14 +108,14 @@ int main() {
     // printf("Init A\n");
     for (size_t i = 0; i < MAT_DIM_I; ++i) {
       for (size_t j = 0; j < MAT_DIM_K; ++j) {
-        full_A[i][j] = 2;
+        full_A[i][j] = 1;
       }
     }
 
     // printf("Init B\n");
     for (size_t i = 0; i < MAT_DIM_K; ++i) {
       for (size_t j = 0; j < MAT_DIM_J; ++j) {
-        full_B[i][j] = 2;
+        full_B[i][j] = 1;
       }
     }
 
@@ -115,11 +126,15 @@ int main() {
       }
     }
 
-    // fi_config(4, 4, 0, 0, 0, 1, 6);
+#ifdef PK
+    fi_config(FIParams.fi_tile_row, FIParams.fi_tile_col, FIParams.fi_pe_row,
+		    FIParams.fi_pe_col, FIParams.fi_type, FIParams.do_fi, FIParams.fi_bit_loc);
+#endif
 
     printf("Starting gemmini matmul\n");
     unsigned long start = read_cycles();
 
+#ifdef PK
     tiled_matmul_auto(MAT_DIM_I, MAT_DIM_J, MAT_DIM_K,
             (elem_t*)full_A, (elem_t*)full_B, NO_BIAS ? NULL : &full_D[0][0], (elem_t*)full_C,
             MAT_DIM_K, MAT_DIM_J, MAT_DIM_J, MAT_DIM_J,
@@ -128,7 +143,18 @@ int main() {
             false, false,
             false, false,
             0,
-            OS);
+            (isWS) ? WS : OS);
+#else
+    tiled_matmul_auto(MAT_DIM_I, MAT_DIM_J, MAT_DIM_K,
+            (elem_t*)full_A, (elem_t*)full_B, NO_BIAS ? NULL : &full_D[0][0], (elem_t*)full_C,
+            MAT_DIM_K, MAT_DIM_J, MAT_DIM_J, MAT_DIM_J,
+            MVIN_SCALE_IDENTITY, MVIN_SCALE_IDENTITY, MVIN_SCALE_IDENTITY,
+            NO_ACTIVATION, ACC_SCALE_IDENTITY, 0, false,
+            false, false,
+            false, false,
+            0,
+            WS);
+#endif
 
     unsigned long end = read_cycles();
     printf("Cycles taken: %u\n", end-start);

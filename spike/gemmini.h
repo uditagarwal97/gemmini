@@ -111,6 +111,10 @@ public:
   reg_t CUSTOMFN(XCUSTOM_ACC)( rocc_insn_t insn, reg_t xs1, reg_t xs2);
   void reset();
 
+  int injectFault(int);
+  int injectStuckAtOne(int, int);
+  int injectStuckAtZero(int, int);
+
   void mvin(reg_t dram_addr, reg_t sp_addr, int state_id);
   void mvout(reg_t dram_addr, reg_t sp_addr);
   void preload(reg_t bd_addr, reg_t c_addr);
