@@ -25,8 +25,8 @@ case class GemminiArrayConfig[T <: Data : Arithmetic, U <: Data, V <: Data](
 
                                                                              tileRows: Int = 1,
                                                                              tileColumns: Int = 1,
-                                                                             meshRows: Int = 256,
-                                                                             meshColumns: Int = 256,
+                                                                             meshRows: Int = 16,
+                                                                             meshColumns: Int = 16,
 
                                                                              ld_queue_length: Int = 8,
                                                                              st_queue_length: Int = 2,

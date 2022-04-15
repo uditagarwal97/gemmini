@@ -78,12 +78,14 @@ object Arithmetic {
 
       override def injectFault(tile_row: UInt, tile_col: UInt, pe_row: UInt, pe_col: UInt, do_fi: UInt, fi_tile_row: UInt, fi_tile_col: UInt, fi_pe_row: UInt, fi_pe_col: UInt, fi_model: UInt, fi_data: UInt) :  UInt = {
 
+        /*
         assert((tile_row >= 0.U) && (tile_col >= 0.U) && (pe_row === 0.U) && (pe_col === 0.U))
   
         var fault = Reg(UInt())
-        fault := Mux(fi_model === 0.U, 1.U, self)
 
-        /*
+        var f = 1.U<<8
+        fault := Mux(fi_model === 0.U, self | f, self)
+
         // Output of PE will be 0
         when (fi_model === 0.U) {
           fault = 0.U
@@ -102,12 +104,13 @@ object Arithmetic {
         .otherwise {
           fault = self
         }
-        */
 
         var retval = Reg(UInt())
-        retval := Mux(tile_col === fi_tile_col && tile_row === fi_tile_row, fault, self)
+        retval := Mux(tile_col === fi_tile_col && tile_row === fi_tile_row, self, self)
 
         return retval
+        */
+        return self | (1.U << 8)
       }
     }
   }
@@ -162,15 +165,19 @@ object Arithmetic {
       
       override def injectFault(tile_row: UInt, tile_col: UInt, pe_row: UInt, pe_col: UInt, do_fi: UInt, fi_tile_row: UInt, fi_tile_col: UInt, fi_pe_row: UInt, fi_pe_col: UInt, fi_model: UInt, fi_data: UInt) :  SInt = {
 
+        /*
         assert((tile_row >= 0.U) && (tile_col >= 0.U) && (pe_row === 0.U) && (pe_col === 0.U))
  
+        val f = 1.S<<8
         var fault = Reg(SInt())
-        fault := Mux(fi_model === 0.U, 1.S, self)
+        fault := Mux(fi_model === 0.U, self | f, self)
 
         var retval = Reg(SInt())
-        retval := Mux(tile_col === fi_tile_col && tile_row === fi_tile_row, fault, self)
+        retval := Mux(tile_col === fi_tile_col && tile_row === fi_tile_row, self, self)
 
         return retval
+        */
+        return self | (1.S << 8)
       }
     }
   }
@@ -417,9 +424,10 @@ object Arithmetic {
 
         assert((tile_row >= 0.U) && (tile_col >= 0.U) && (pe_row === 0.U) && (pe_col === 0.U))
   
+        /*
         val fault = Reg(Float(self.expWidth, self.sigWidth))
 
-        /*
+        
         // Output of PE will be 0
         when (fi_model === 0.U) {
           fault := 0.U.asTypeOf(self)
@@ -439,14 +447,17 @@ object Arithmetic {
         .otherwise {
           fault := self
         }
-        */
+        
 
-        fault := Mux(fi_model === 0.U, 1.U.asTypeOf(self), self)
+        assert(0.U === 1.U)
+        fault := Mux(fi_model === 0.U, 0.U.asTypeOf(self), self)
 
         var retval = Reg(Float(self.expWidth, self.sigWidth))
         retval := Mux(tile_col === fi_tile_col && tile_row === fi_tile_row, fault, self)
 
         return retval
+        */
+       self
       }
     }
   }

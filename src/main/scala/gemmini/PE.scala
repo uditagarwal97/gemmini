@@ -108,7 +108,7 @@ class PE[T <: Data](inputType: T, outputType: T, accType: T, df: Dataflow.Value,
       io.out_c := (c1 >> shift_offset).clippedToWidthOf(outputType)
       io.out_b := b
       
-      when(do_fi === 1.U(1.W)){
+      when(do_fi === 1.U(1.W) && tile_row === fi_tile_row && tile_col === fi_tile_col){
         c2 := c2.mac(a, b.asTypeOf(inputType)).injectFault(tile_row, tile_col, pe_row, pe_col, do_fi, fi_tile_row, fi_tile_col, fi_pe_row, fi_pe_col, fault_model, fault_data)
       }.otherwise {
         c2 := c2.mac(a, b.asTypeOf(inputType))
@@ -119,7 +119,7 @@ class PE[T <: Data](inputType: T, outputType: T, accType: T, df: Dataflow.Value,
       io.out_c := (c2 >> shift_offset).clippedToWidthOf(outputType)
       io.out_b := b
       
-      when(do_fi === 1.U(1.W)){
+      when(do_fi === 1.U(1.W) && tile_row === fi_tile_row && tile_col === fi_tile_col){
         c1 := c1.mac(a, b.asTypeOf(inputType)).injectFault(tile_row, tile_col, pe_row, pe_col, do_fi, fi_tile_row, fi_tile_col, fi_pe_row, fi_pe_col, fault_model, fault_data)
       }.otherwise {
         c1 := c1.mac(a, b.asTypeOf(inputType))
@@ -131,7 +131,7 @@ class PE[T <: Data](inputType: T, outputType: T, accType: T, df: Dataflow.Value,
     when(prop === PROPAGATE) {
       io.out_c := c1
 
-      when(do_fi === 1.U(1.W)) {
+      when(do_fi === 1.U(1.W) && tile_row === fi_tile_row && tile_col === fi_tile_col) {
         io.out_b := b.mac(a, c2.asTypeOf(inputType)).injectFault(tile_row, tile_col, pe_row, pe_col, do_fi, fi_tile_row, fi_tile_col, fi_pe_row, fi_pe_col, fault_model, fault_data)
       }.otherwise {
         io.out_b := b.mac(a, c2.asTypeOf(inputType))
@@ -141,7 +141,7 @@ class PE[T <: Data](inputType: T, outputType: T, accType: T, df: Dataflow.Value,
     }.otherwise {
       io.out_c := c2
 
-      when(do_fi === 1.U(1.W)){
+      when(do_fi === 1.U(1.W) && tile_row === fi_tile_row && tile_col === fi_tile_col){
         io.out_b := b.mac(a, c1.asTypeOf(inputType)).injectFault(tile_row, tile_col, pe_row, pe_col, do_fi, fi_tile_row, fi_tile_col, fi_pe_row, fi_pe_col, fault_model, fault_data)
       }.otherwise {
         io.out_b := b.mac(a, c1.asTypeOf(inputType))
